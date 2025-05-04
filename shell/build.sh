@@ -38,12 +38,18 @@ go_build() {
 }
 
 make_build() {
+    echo "[Make] Searching for configuration scripts"
     if [[ -f "configure" ]]; then
         bash ./configure
     elif [[ -f "configure.sh" ]]; then
         bash ./configure.sh
     fi
-    make build || make install
+    echo "[Make] Building project..."
+    echo -n "[Make] "
+    make BINARY=$TARGET_NAME build
+    echo "[Make] Installing..."
+    echo -n "[Make] "
+    make BINARY=$TARGET_NAME install
     return $?
 }
 
