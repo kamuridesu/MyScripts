@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from pathlib import Path
 from typing import TypedDict
 
 ItemType = TypedDict("ItemType", {"cmd": str, "when": int, "paths": list[str]})
@@ -12,14 +11,13 @@ class Command:
     paths: list[str]
 
 
-def load_exclusion_list() -> list[str]:
-    exclusion_file = Path(".exclusion")
-    if exclusion_file.exists():
-        return exclusion_file.read_text().splitlines()
-    return []
+def load_exclusion_list(exclusion: str) -> list[str]:
+    return exclusion.strip().splitlines()
 
 
 def has_term_from_exclusion(exclusion_list: list[str], command: Command) -> bool:
+    if len(exclusion_list) < 1:
+        return False
     for term in exclusion_list:
         term = term.lower()
         if term in command.cmd.lower():
@@ -31,12 +29,15 @@ def has_term_from_exclusion(exclusion_list: list[str], command: Command) -> bool
     return False
 
 
-def __dedup(data: list[ItemType]) -> list[Command]:
+def __dedup(data: list[ItemType], exclusion: str) -> list[Command]:
     uniq: list[Command] = []
     queries: list[str] = []
-    exclude = load_exclusion_list()
+    total = len(data)
+    exclude = load_exclusion_list(exclusion)
     for _, item in enumerate(data):
         command = Command(**item)
+        if command.cmd is None:
+            continue
         if has_term_from_exclusion(exclude, command):
             print(f"Skipping command {command.cmd}")
             continue
@@ -47,6 +48,7 @@ def __dedup(data: list[ItemType]) -> list[Command]:
             queries.append(query)
             uniq.append(command)
     uniq.sort(key=lambda cmd: cmd.when)
+    print(f"Pruned items: {total - len(uniq)}")
     return uniq
 
 
@@ -98,7 +100,7 @@ def parse_content(contents: str) -> list[ItemType]:
     return items
 
 
-def dedup(contents: str) -> str:
+def dedup(contents: str, exclusion: str) -> str:
     data = parse_content(contents)
-    commands = __dedup(data)
+    commands = __dedup(data, exclusion)
     return as_fish_yaml(commands)

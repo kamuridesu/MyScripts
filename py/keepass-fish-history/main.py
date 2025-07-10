@@ -5,8 +5,9 @@ from pathlib import Path
 
 from pykeepass import Attachment, Entry, PyKeePass
 
-type PathOrStr = Path | str
 from dedup import dedup
+
+type PathOrStr = Path | str
 
 
 class KeepassManager:
@@ -60,6 +61,12 @@ class KeepassManager:
         self.entry.add_attachment(binary_id, "fish_history")
         self.db.save()
 
+    def load_exlcusion_list(self) -> str:
+        notes = self.entry.notes
+        if notes is None:
+            return ""
+        return notes
+
 
 class FishManager:
     def __init__(self) -> None:
@@ -88,12 +95,13 @@ def main():
     raw_path = sys.argv[2]
 
     keepass = KeepassManager(db_path, raw_path)
+    exclusion = keepass.load_exlcusion_list()
     fish = FishManager()
     attachment_data = keepass.load_attachment().decode()
     fish_history = fish.read_history()
     print(f"Current history len: {len(fish_history)}")
     print("Merging history...")
-    concat_fish_history = dedup(f"{attachment_data}\n{fish_history}")
+    concat_fish_history = dedup(f"{attachment_data}\n{fish_history}", exclusion)
     print(f"New fish history len: {len(concat_fish_history)}")
     fish.backup()
     print("Saving history...")
