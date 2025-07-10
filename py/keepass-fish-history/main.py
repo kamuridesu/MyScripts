@@ -1,76 +1,82 @@
 import getpass
 import sys
+import typing
 from pathlib import Path
 
 from pykeepass import Attachment, Entry, PyKeePass
 
 type PathOrStr = Path | str
-
 from dedup import dedup
 
-FISH_HISTORY_PATH = Path.home() / ".local/share/fish/fish_history"
+
+class KeepassManager:
+    def __init__(self, db_path: str, path: str) -> None:
+        self.db = self.__load_database(db_path)
+        self.path = [x for x in path.split("/") if x != ""]
+        self.__entry: Entry | None = None
+
+    @property
+    def entry(self) -> Entry:
+        if self.__entry is None:
+            self.__entry = self.load_entry()
+        return self.__entry
+
+    def __load_database(self, db_path: PathOrStr) -> PyKeePass:
+        print("Loading database...")
+        password = getpass.getpass(f"Enter password to unlock {db_path}: ")
+        return PyKeePass(db_path, password=password)
+
+    def add_entry(self):
+        name = self.path[-1]
+        group = self.db.root_group
+        for p in self.path[:-1]:
+            group = self.db.add_group(group, p)
+        self.db.add_entry(group, name, "", "")
+        self.db.save()
+        print(f"Entry {'/'.join(self.path)} created, restart the script.")
+        exit(0)
+
+    def load_entry(self) -> Entry:
+        entry = typing.cast(typing.Optional[Entry], self.db.find_entries(path=self.path, first=True))
+        if entry is None:
+            return self.add_entry()
+        return entry
+
+    def load_attachment(self) -> bytes:
+        print("Fetching attachment data...")
+        attachment: list[Attachment] = self.entry.attachments
+        if len(attachment) < 1:
+            return b""
+        return attachment[0].data
+
+    def add_attachment(self, data: bytes):
+        attachment: list[Attachment] = self.entry.attachments
+        if len(attachment) > 1:
+            at = attachment[0]
+            self.entry.delete_attachment(at)
+            self.db.delete_binary(at.id)
+
+        binary_id = self.db.add_binary(data)
+        self.entry.add_attachment(binary_id, "fish_history")
+        self.db.save()
 
 
-def backup_fish_history():
-    backup_file = Path.home() / ".local/share/fish/fish_history.bkp"
-    backup_file.touch()
-    backup_file.write_text(FISH_HISTORY_PATH.read_text())
+class FishManager:
+    def __init__(self) -> None:
+        self.fish_history_path = Path.home() / ".local/share/fish/fish_history"
+        self.backup_file = Path.home() / ".local/share/fish/fish_history.bkp"
 
+    def backup(self):
+        print("Backing up fish history...")
+        self.backup_file.touch()
+        self.backup_file.write_text(self.fish_history_path.read_text())
+    
+    def read_history(self) -> str:
+        print("Reading fish history...")
+        return self.fish_history_path.read_text()
 
-def read_fish_history() -> bytes:
-    with open(FISH_HISTORY_PATH, "rb") as f:
-        return f.read()
-
-
-def save_fish_history(data: str):
-    with open(FISH_HISTORY_PATH, "w") as f:
-        f.write(data)
-
-
-def load_database(db_path: PathOrStr) -> PyKeePass:
-    password = getpass.getpass(f"Enter password to unlock {db_path}: ")
-    return PyKeePass(db_path, password=password)
-
-
-def create_entry(db: PyKeePass, path: list[str]) -> Entry:
-    name = path[-1]
-    group = db.root_group
-    for p in path[:-1]:
-        group = db.add_group(group, p)
-    db.add_entry(group, name, "", "")
-    db.save()
-    print(f"Entry {'/'.join(path)} created, restart the script.")
-    exit(0)
-
-
-def load_entry(db: PyKeePass, path: list[str]) -> Entry:
-    entry = db.find_entries(path=path)
-    if entry is None:
-        return create_entry(db, path)
-    return entry
-
-
-def attach_file(db: PyKeePass, path: list[str], data: bytes) -> Entry:
-    entry = load_entry(db, path)
-
-    attachment: list[Attachment] = entry.attachments
-    if len(attachment) > 1:
-        at = attachment[0]
-        entry.delete_attachment(at)
-        db.delete_binary(at.id)
-
-    binary_id = db.add_binary(data)
-    entry.add_attachment(binary_id, "fish_history")
-    db.save()
-    return entry
-
-
-def read_attachment(db: PyKeePass, path: list[str]) -> bytes:
-    entry = load_entry(db, path)
-    attachment: list[Attachment] = entry.attachments
-    if len(attachment) < 1:
-        return b""
-    return attachment[0].data
+    def save_history(self, contents: str):
+        return self.fish_history_path.write_text(contents)
 
 
 def main():
@@ -81,24 +87,18 @@ def main():
     db_path = sys.argv[1]
     raw_path = sys.argv[2]
 
-    path_list = [x for x in raw_path.split("/") if x != ""]
-
-    print("Loading database...")
-    db = load_database(db_path)
-    print("Fetching attachment data...")
-    attachment_data = read_attachment(db, path_list).decode()
-    print("Reading fish history...")
-    fish_history = read_fish_history().decode()
+    keepass = KeepassManager(db_path, raw_path)
+    fish = FishManager()
+    attachment_data = keepass.load_attachment().decode()
+    fish_history = fish.read_history()
     print(f"Current history len: {len(fish_history)}")
     print("Merging history...")
     concat_fish_history = dedup(f"{attachment_data}\n{fish_history}")
-    print(f"New fish history len: {len(fish_history)}")
-    print("Backing up fish history...")
-    backup_fish_history()
+    print(f"New fish history len: {len(concat_fish_history)}")
+    fish.backup()
     print("Saving history...")
-    save_fish_history(concat_fish_history)
-
-    attach_file(db, path_list, concat_fish_history.encode())
+    fish.save_history(concat_fish_history)
+    keepass.add_attachment(concat_fish_history.encode())
     print("Done!")
 
 
