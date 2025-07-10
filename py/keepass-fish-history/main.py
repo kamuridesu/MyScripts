@@ -10,6 +10,13 @@ from dedup import dedup
 
 FISH_HISTORY_PATH = Path.home() / ".local/share/fish/fish_history"
 
+
+def backup_fish_history():
+    backup_file = Path.home() / ".local/share/fish/fish_history.bkp"
+    backup_file.touch()
+    backup_file.write_text(FISH_HISTORY_PATH.read_text())
+
+
 def read_fish_history() -> bytes:
     with open(FISH_HISTORY_PATH, "rb") as f:
         return f.read()
@@ -82,9 +89,12 @@ def main():
     attachment_data = read_attachment(db, path_list).decode()
     print("Reading fish history...")
     fish_history = read_fish_history().decode()
+    print(f"Current history len: {len(fish_history)}")
     print("Merging history...")
     concat_fish_history = dedup(f"{attachment_data}\n{fish_history}")
-
+    print(f"New fish history len: {len(fish_history)}")
+    print("Backing up fish history...")
+    backup_fish_history()
     print("Saving history...")
     save_fish_history(concat_fish_history)
 

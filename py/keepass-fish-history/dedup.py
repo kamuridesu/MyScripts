@@ -1,5 +1,6 @@
 import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable, Type, TypeVar, get_args
 
 try:
@@ -78,11 +79,21 @@ class Command(Base):
     paths: list[str]
 
 
+def load_exclusion_list() -> list[str]:
+    exclusion_file = Path(".exclusion")
+    if exclusion_file.exists():
+        return json.loads(exclusion_file.read_text())
+    return []
+
+
 def __dedup(data: list[dict[str, str]]) -> list[Command]:
     uniq: list[Command] = []
     queries: list[str] = []
+    exclude = load_exclusion_list()
     for idx, item in enumerate(data):
         command = Command.parse(item)
+        if any([term in command.cmd for term in exclude]):
+            continue
         pseudo = ([] if command.paths is None else command.paths) + [command.cmd]
         query = "-".join(pseudo)
         if query not in queries:
