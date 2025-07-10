@@ -6,6 +6,5 @@ requires-python = ">=3.12"
 dependencies = [
     "pykeepass>=4.1.1.post1",
     "lxml>=6.0.0",
-    "pyyaml>=6.0.2",
 ]
 
