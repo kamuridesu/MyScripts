@@ -4,6 +4,7 @@ import typing
 from pathlib import Path
 
 from pykeepass import Attachment, Entry, PyKeePass
+from pykeepass.exceptions import CredentialsError
 
 from dedup import dedup
 
@@ -24,8 +25,12 @@ class KeepassManager:
 
     def __load_database(self, db_path: PathOrStr) -> PyKeePass:
         print("Loading database...")
-        password = getpass.getpass(f"Enter password to unlock {db_path}: ")
-        return PyKeePass(db_path, password=password)
+        try:
+            password = getpass.getpass(f"Enter password to unlock {db_path}: ")
+            return PyKeePass(db_path, password=password)
+        except CredentialsError:
+            print(f"Error: Password is invalid for database {db_path}")
+            exit(1)
 
     def add_entry(self):
         name = self.path[-1]
@@ -38,7 +43,9 @@ class KeepassManager:
         exit(0)
 
     def load_entry(self) -> Entry:
-        entry = typing.cast(typing.Optional[Entry], self.db.find_entries(path=self.path, first=True))
+        entry = typing.cast(
+            typing.Optional[Entry], self.db.find_entries(path=self.path, first=True)
+        )
         if entry is None:
             return self.add_entry()
         return entry
@@ -77,7 +84,7 @@ class FishManager:
         print("Backing up fish history...")
         self.backup_file.touch()
         self.backup_file.write_text(self.fish_history_path.read_text())
-    
+
     def read_history(self) -> str:
         print("Reading fish history...")
         return self.fish_history_path.read_text()
@@ -111,4 +118,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("Aborted by the user!")
+        exit(1)

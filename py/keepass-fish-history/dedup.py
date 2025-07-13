@@ -21,10 +21,12 @@ def has_term_from_exclusion(exclusion_list: list[str], command: Command) -> bool
     for term in exclusion_list:
         term = term.lower()
         if term in command.cmd.lower():
+            print(f"Skipping command {command.cmd}, it contains {term}")
             return True
         if command.paths != None and any(
             term in path.lower() for path in command.paths
         ):
+            print(f"Skipping command {command.cmd}, it contains {term}")
             return True
     return False
 
@@ -39,7 +41,6 @@ def __dedup(data: list[ItemType], exclusion: str) -> list[Command]:
         if command.cmd is None:
             continue
         if has_term_from_exclusion(exclude, command):
-            print(f"Skipping command {command.cmd}")
             continue
         query = "-".join(
             ([] if command.paths is None else command.paths) + [command.cmd]
