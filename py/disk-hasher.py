@@ -48,6 +48,7 @@ class Manager:
         self.progress_thread.start()
         if callback != None:
             callback()
+        manager.finish()
 
     def print(self, text: str, now=False):
         text = text.replace(str(self.home), "")
@@ -130,8 +131,6 @@ def main():
     else:
         root = Path(sys.argv[1])
     manager.init(root, hash_files)
-
-    manager.finish()
     print()
     print("Done")
 
